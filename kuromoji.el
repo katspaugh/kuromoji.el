@@ -7,7 +7,7 @@
 (require 'url)
 (require 'json)
 
-(defface kuromoji-noun
+(defface kuromoji-face-noun
   `((((class color) (background light))
      (:foreground  "blue"))
     (((class color) (background dark))
@@ -15,7 +15,15 @@
   "Face for nouns."
   :group 'kuromoji)
 
-(defface kuromoji-verb
+(defface kuromoji-face-alt
+  `((((class color) (background light))
+     (:foreground  "darkblue"))
+    (((class color) (background dark))
+     (:foreground  "darkblue")))
+  "Face for nouns."
+  :group 'kuromoji)
+
+(defface kuromoji-face-verb
   `((((class color) (background light))
      (:foreground  "darkred"))
     (((class color) (background dark))
@@ -23,7 +31,7 @@
   "Face for verbs."
   :group 'kuromoji)
 
-(defface kuromoji-aux-verb
+(defface kuromoji-face-morpheme
   `((((class color) (background light))
      (:foreground  "darkgreen"))
     (((class color) (background dark))
@@ -31,7 +39,7 @@
   "Face for verbs."
   :group 'kuromoji)
 
-(defface kuromoji-adverb
+(defface kuromoji-face-adverb
   `((((class color) (background light))
      (:foreground  "purple"))
     (((class color) (background dark))
@@ -39,7 +47,7 @@
   "Face for adverbs."
   :group 'kuromoji)
 
-(defface kuromoji-adjective
+(defface kuromoji-face-adjective
   `((((class color) (background light))
      (:foreground  "orange"))
     (((class color) (background dark))
@@ -47,7 +55,7 @@
   "Face for adjectives."
   :group 'kuromoji)
 
-(defface kuromoji-particle
+(defface kuromoji-face-particle
   `((((class color) (background light))
      (:foreground  "darkgrey"))
     (((class color) (background dark))
@@ -55,7 +63,7 @@
   "Face for particles."
   :group 'kuromoji)
 
-(defface kuromoji-punctuation
+(defface kuromoji-face-punctuation
   `((((class color) (background light))
      (:foreground  "black"))
     (((class color) (background dark))
@@ -65,13 +73,13 @@
 
 
 (defvar kuromoji-pos-table '(
-  ("名詞" . kuromoji-noun)
-  ("動詞" . kuromoji-verb)
-  ("助詞" . kuromoji-particle)
-  ("副詞" . kuromoji-adverb)
-  ("記号" . kuromoji-punctuation)
-  ("助動詞" . kuromoji-aux-verb)
-  ("形容詞" . kuromoji-adjective)))
+  ("名詞" . kuromoji-face-noun)
+  ("動詞" . kuromoji-face-verb)
+  ("助詞" . kuromoji-face-particle)
+  ("副詞" . kuromoji-face-adverb)
+  ("記号" . kuromoji-face-punctuation)
+  ("助動詞" . kuromoji-face-morpheme)
+  ("形容詞" . kuromoji-face-adjective)))
 
 
 (defvar kuromoji-url "http://atilika.org/kuromoji/rest/tokenizer/tokenize"
@@ -94,14 +102,16 @@
 
 
 (defun kuromoji-parse-response (data)
-  (let ((cursor 1))
+  (let ((cursor 1) last-face)
     (mapc (lambda (token)
-            (let ((end (+ cursor (length (plist-get token :surface)))))
-              (kuromoji-highlight
-               (plist-get token :reading)
-               cursor end
-               (cdr (assoc (car (split-string (plist-get token :pos) ","))
-                           kuromoji-pos-table)))
+            (let* ((end (+ cursor (length (plist-get token :surface))))
+                   (pos (car (split-string (plist-get token :pos) ",")))
+                   (face (cdr (assoc pos kuromoji-pos-table))))
+              (when (eq face last-face)
+                (setq face 'kuromoji-face-alt))
+              (kuromoji-highlight (plist-get token :reading) cursor end face)
+              ;; set the last face
+              (setq last-face face)
               ;; move cursor
               (setq cursor end)))
           (plist-get data :tokens))))
