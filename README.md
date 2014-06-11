@@ -8,8 +8,8 @@ and part-of-speech tagger.
 
 ### TODO
 
- * Right now it uses the http://atilika.org/ server, but should support
-local installations as well.
+ * *Right now it abuses the http://atilika.org/ server, but should support
+local installations as well.*
  * Display readings as furigana.
  * On-the-fly highlighting.
 
