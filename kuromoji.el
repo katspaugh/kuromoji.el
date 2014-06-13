@@ -1,11 +1,13 @@
 ;;; -*- lexical-binding: t -*-
 ;;; kuromoji.el --- Japanese part-of-speech highlighting using Kuromoji
+
 ;;; See http://atilika.org/kuromoji/
 
 ;;; Code:
 
-(require 'url)
-(require 'json)
+(defgroup kuromoji '() "Kuromoji")
+
+(defcustom kuromoji-jar-path "kuromoji-0.7.7.jar" "Path to Kuromoji jar.")
 
 (defface kuromoji-face-noun
   `((((class color) (background light))
@@ -71,7 +73,6 @@
   "Face for particles."
   :group 'kuromoji)
 
-
 (defvar kuromoji-pos-table '(
   ("名詞" . kuromoji-face-noun)
   ("動詞" . kuromoji-face-verb)
@@ -81,40 +82,30 @@
   ("助動詞" . kuromoji-face-morpheme)
   ("形容詞" . kuromoji-face-adjective)))
 
+(defvar kuromoji-process nil "The variable to hold a single Kuromoji process.")
+(defvar kuromoji-cursor 1 "Tracks highlighting position.")
+(defvar kuromoji-last-face nil "Tracks highlighting face.")
 
-(defvar kuromoji-url "http://atilika.org/kuromoji/rest/tokenizer/tokenize"
-  "Kuromoji server URL")
-
-(defun kuromoji-request (text)
-  (let ((url-request-method "POST")
-        (url-request-extra-headers
-         '(("Content-Type" . "application/x-www-form-urlencoded")))
-        (url-request-data (concat "text=" (url-hexify-string text))))
-    (let (body)
-      (with-current-buffer (url-retrieve-synchronously kuromoji-url)
-        (when (eq 200 (url-http-parse-response))
-          (setq body (decode-coding-string (buffer-substring-no-properties
-                                            (+ 1 url-http-end-of-headers) (point-max))
-                                           'utf-8))))
-      (let ((json-array-type 'list)
-            (json-object-type 'plist))
-        (kuromoji-parse-response (json-read-from-string body))))))
-
-
-(defun kuromoji-parse-response (data)
-  (let ((cursor 1) last-face)
-    (mapc (lambda (token)
-            (let* ((end (+ cursor (length (plist-get token :surface))))
-                   (pos (car (split-string (plist-get token :pos) ",")))
-                   (face (cdr (assoc pos kuromoji-pos-table))))
-              (when (eq face last-face)
-                (setq face 'kuromoji-face-alt))
-              (kuromoji-highlight (plist-get token :reading) cursor end face)
-              ;; set the last face
-              (setq last-face face)
-              ;; move cursor
-              (setq cursor end)))
-          (plist-get data :tokens))))
+(defun kuromoji-output-filter (proc output)
+  (mapc
+   (lambda (line)
+     (when (and (< 0 (length line)) (not (string= line "Tokenizer ready.")))
+       (let ((tab-sep (split-string line "\t")))
+         (let ((surface (car tab-sep))
+               (features (split-string (cadr tab-sep) ",")))
+           (let ((pos (nth 0 features))
+                 (reading (nth 7 features))
+                 (start kuromoji-cursor)
+                 (end (+ kuromoji-cursor (length surface))))
+             (setq kuromoji-cursor end)
+             (let ((face (cdr (assoc pos kuromoji-pos-table))))
+               (when (eq face kuromoji-last-face)
+                 (setq face 'kuromoji-face-alt))
+               (setq kuromoji-last-face face)
+               (kuromoji-highlight reading start end face)))))))
+   (split-string output "\n"))
+  (with-current-buffer (process-buffer proc)
+    (insert output)))
 
 (defun kuromoji-highlight (msg beg end face)
   "Highlight text from BEG to END with FACE and help MSG."
@@ -122,10 +113,9 @@
     (overlay-put ovl 'kuromoji t)
     (overlay-put ovl 'font-lock-face face))
   (put-text-property beg end 'help-echo msg)
-  (put-text-property beg end 'point-entered #'kuromoji-echo))
+  (put-text-property beg end 'point-entered #'kuromoji-echo-help))
 
-
-(defun kuromoji-echo (_old-point new-point)
+(defun kuromoji-echo-help (_old-point new-point)
   "Called by point-motion hooks."
   (let ((msg (get-text-property new-point 'help-echo)))
     (when (and (stringp msg)
@@ -141,14 +131,38 @@
         (when (overlay-get o 'kuromoji)
           (delete-overlay o))))))
 
+(defun kuromoji-analyze (proc)
+  (setq kuromoji-cursor 1)
+  (setq kuromoji-last-face nil)
+  (let* ((proc-mark (process-mark proc))
+         (output-start (marker-position proc-mark)))
+    (process-send-region proc (point-min) (point-max))
+    (process-send-string proc "\n")
+    (accept-process-output proc 0.5)))
+
 (defun kuromoji-start ()
   (interactive)
   (kuromoji-clear)
-  (kuromoji-request
-   (buffer-substring-no-properties (point-min) (point-max))))
+  (unless (and kuromoji-process (process-live-p kuromoji-process))
+    (message "Starting Kuromoji process...")
+    (setq kuromoji-process
+          (let ((process-connection-type nil))
+            (start-process-shell-command
+             "Kuromoji" "*Kuromoji Process*"
+             (concat "java -Dfile.encoding=UTF-8 -cp "
+                     kuromoji-jar-path
+                     " org.atilika.kuromoji.TokenizerRunner"))))
+    (set-process-filter kuromoji-process #'kuromoji-output-filter))
+  (kuromoji-analyze kuromoji-process))
 
 (defun kuromoji-stop ()
   (interactive)
-  (kuromoji-clear))
+  (kuromoji-clear)
+  (message "Kuromoji process killed.")
+  (when (and kuromoji-process (process-live-p kuromoji-process))
+    (let ((buf (process-buffer kuromoji-process)))
+      (process-kill-without-query kuromoji-process)
+      (kill-buffer buf)
+      (setq kuromoji-process nil))))
 
 (provide 'kuromoji)
