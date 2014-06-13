@@ -17,7 +17,7 @@
   "Face for nouns."
   :group 'kuromoji)
 
-(defface kuromoji-face-alt
+(defface kuromoji-face-noun-alt
   `((((class color) (background light))
      (:foreground  "darkblue"))
     (((class color) (background dark))
@@ -100,8 +100,8 @@
                    (end (+ kuromoji-cursor (length surface))))
                (setq kuromoji-cursor end)
                (let ((face (cdr (assoc pos kuromoji-pos-table))))
-                 (when (eq face kuromoji-last-face)
-                   (setq face 'kuromoji-face-alt))
+                 (when (and (eq face kuromoji-last-face) (eq face 'kuromoji-face-noun))
+                   (setq face 'kuromoji-face-noun-alt))
                  (setq kuromoji-last-face face)
                  (kuromoji-highlight reading start end face))))))))
    (split-string output "\n"))
