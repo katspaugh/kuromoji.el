@@ -9,7 +9,8 @@ tokenizer and part-of-speech tagger.
 ### Installation
 
 [Download Kuromoji](https://github.com/atilika/kuromoji/downloads) and
-put the jar file into some directory. Install Java if you haven't already.
+put the jar file into some directory. Install Java if you haven't
+already.
 
 Put this into your Emacs init file:
 
