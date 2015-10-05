@@ -4,7 +4,7 @@ kuromoji.el
 A package for Emacs that fontifies Japanese text using Kuromoji
 tokenizer and part-of-speech tagger.
 
-![screenshot](http://i.imgur.com/fJBIMZf.png)
+<img src="http://i.imgur.com/fJBIMZf.png" width="400" />
 
 ### Installation
 
